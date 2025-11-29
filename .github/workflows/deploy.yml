@@ -1,0 +1,36 @@
+name: Deploy to Snowflake
+
+on:
+  push:
+    branches: [ main, staging ]
+  pull_request:
+    types: [ closed ]
+
+jobs:
+  deploy:
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      SNOWFLAKE_ACCOUNT:   ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER:      ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install --upgrade snowflake-cli-labs
+      - run: |
+          echo "$SNOWFLAKE_PRIVATE_KEY" > /tmp/key.p8
+          chmod 600 /tmp/key.p8
+          mkdir -p ~/.snowflake && chmod 700 ~/.snowflake
+          cat > ~/.snowflake/connections.toml <<EOF2
+          [ci]
+          account = "$SNOWFLAKE_ACCOUNT"
+          user = "$SNOWFLAKE_USER"
+          authenticator = "jwt"
+          private_key_path = "/tmp/key.p8"
+          EOF2
+          chmod 600 ~/.snowflake/connections.toml
+          snow connection test --connection ci
+      - run: snow git fetch course_repo.public.advanced_data_engineering_snowflake --connection ci
+      - run: snow git execute "@advanced_data_engineering_snowflake/branches/staging/module-1/hamburg_weather/pipeline/data/" --connection ci
+      - run: echo "DEPLOYED SUCCESSFULLY – LAB COMPLETE!"
