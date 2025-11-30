@@ -62,6 +62,6 @@ jobs:
           echo "Using branch: $SNOWFLAKE_BRANCH"
           
           snow git execute @COURSE_REPO.PUBLIC.advanced_data_engineering_snowflake/branches/$SNOWFLAKE_BRANCH/module-1/hamburg_weather/pipeline/data/ \
-          -D "env='$DEPLOY_ENV'"
+          -D "env='$DEPLOY_ENV'" \
           --database=COURSE_REPO \
           --schema=PUBLIC
