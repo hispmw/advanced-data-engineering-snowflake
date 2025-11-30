@@ -50,10 +50,10 @@ jobs:
           snow sql -q "USE DATABASE COURSE_REPO" --connection ci
           snow git fetch course_repo.public.advanced_data_engineering_snowflake --connection ci
           snow git execute \
-            "@advanced_data_engineering_snowflake/branches/${{ steps.env.outputs.env }}/module-1/hamburg_weather/pipeline/data/" \
+            "@advanced_data_engineering_snowflake/branches/main/module-1/hamburg_weather/pipeline/data/" \
             --connection ci \
             --database COURSE_REPO \
-            --schema PUBLIC \
+            --schema PUBLIC
             -D "env=${{ steps.env.outputs.env }}"
 
       - run: echo "Deployed to ${{ steps.env.outputs.env }} — LAB COMPLETE!"
