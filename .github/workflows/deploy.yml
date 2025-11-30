@@ -1,59 +1,66 @@
-name: Deploy to Snowflake
-
+name: Deploy Templatized Data Environment
 on:
-  push:
-    branches: [ main, staging ]
   pull_request:
-    types: [ closed ]
-
+    types: [closed]
+    branches:
+      - staging
+      - main
+  push:
+    branches:
+      - staging
+      - main
 jobs:
-  deploy:
-    if: github.event_name == 'push' || github.event.pull_request.merged == true
+  deploy_data_environment:
+    # Only run when PR is merged or on direct push to environment branches
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     env:
-      SNOWFLAKE_ACCOUNT:     ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_USER:        ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
-
+      # Updated connection secret with private key authentication
+      SNOWFLAKE_CONNECTIONS_ADVANCED_DATA_ENGINEERING_SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_CONNECTIONS_ADVANCED_DATA_ENGINEERING_SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_CONNECTIONS_ADVANCED_DATA_ENGINEERING_SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Snowflake CLI
-        run: pip install --upgrade snowflake-cli-labs
-
-      - name: Set up secure JWT connection
+      # Checkout step is necessary to access repository files
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      # Determine environment based on target branch
+      - name: Set environment
+        id: set_env
         run: |
-          echo "$SNOWFLAKE_PRIVATE_KEY" > /tmp/key.p8
-          chmod 600 /tmp/key.p8
-          mkdir -p ~/.snowflake && chmod 700 ~/.snowflake
-          cat > ~/.snowflake/connections.toml <<'EOF'
-          [ci]
-          account       = "${{ secrets.SNOWFLAKE_ACCOUNT }}"
-          user          = "${{ secrets.SNOWFLAKE_USER }}"
-          authenticator = "SNOWFLAKE_JWT"
-          private_key_path = "/tmp/key.p8"
-          EOF
-          chmod 600 ~/.snowflake/connections.toml
-
-      # Auto-detect environment: main → prod, staging → staging
-      - name: Determine target environment
-        id: env
-        run: |
-          if [[ "${{ github.base_ref || github.ref_name }}" == "main" ]]; then
-            echo "env=prod" >> $GITHUB_OUTPUT
+          TARGET_BRANCH="${GITHUB_BASE_REF:-${GITHUB_REF#refs/heads/}}"
+          
+          if [[ $TARGET_BRANCH == "staging" ]]; then
+            echo "DEPLOY_ENV=staging" >> $GITHUB_ENV
+            echo "SNOWFLAKE_BRANCH=staging" >> $GITHUB_ENV
+            echo "Environment set to staging"
+          elif [[ $TARGET_BRANCH == "main" ]]; then
+            echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
+            echo "SNOWFLAKE_BRANCH=main" >> $GITHUB_ENV
+            echo "Environment set to production"
           else
-            echo "env=staging" >> $GITHUB_OUTPUT
+            echo "Unexpected branch: $TARGET_BRANCH"
+            exit 1
           fi
-
-      - name: Deploy to Snowflake Git branch
+      
+      # Install Snowflake CLI GitHub Action and point to config file
+      - name: Install SnowflakeCLI
+        uses: snowflakedb/snowflake-cli-action@v1.5
+        with:
+          cli-version: "latest"
+          default-config-file-path: "config.toml"
+      
+      # Fetch latest changes from the repository to Snowflake
+      - name: Fetch latest changes to Snowflake
+        run: snow git fetch advanced_data_engineering_snowflake
+      
+      # Deploy templates to the data environment
+      - name: Deploy templates to data environment
         run: |
-          snow sql -q "USE DATABASE COURSE_REPO" --connection ci
-          snow git fetch course_repo.public.advanced_data_engineering_snowflake --connection ci
-          snow git execute \
-            "@advanced_data_engineering_snowflake/branches/main/module-1/hamburg_weather/pipeline/data/" \
-            --connection ci \
-            --database COURSE_REPO \
-            --schema PUBLIC \
-            -D env=main
-
-      - run: echo "Deployed to ${{ steps.env.outputs.env }} — LAB COMPLETE!"
+          echo "Using environment: $DEPLOY_ENV"
+          echo "Using branch: $SNOWFLAKE_BRANCH"
+          
+          snow git execute @advanced_data_engineering_snowflake/branches/$SNOWFLAKE_BRANCH/module-1/hamburg_weather/pipeline/data/ \
+          -D "env='$DEPLOY_ENV'" \
+          --database=COURSE_REPO \
+          --schema=PUBLIC
