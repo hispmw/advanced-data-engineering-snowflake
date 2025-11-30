@@ -53,9 +53,7 @@ jobs:
 
       # Fetch latest changes from the repository to Snowflake
       - name: Fetch latest changes to Snowflake
-        run: |
-          snow sql -q "USE DATABASE COURSE_REPO;"
-          snow git fetch advanced_data_engineering_snowflake
+        run: snow git fetch COURSE_REPO.PUBLIC.advanced_data_engineering_snowflake
       
       # Deploy templates to the data environment
       - name: Deploy templates to data environment
@@ -63,7 +61,7 @@ jobs:
           echo "Using environment: $DEPLOY_ENV"
           echo "Using branch: $SNOWFLAKE_BRANCH"
           
-          snow git execute @advanced_data_engineering_snowflake/branches/$SNOWFLAKE_BRANCH/module-1/hamburg_weather/pipeline/data/ \
-          -D "env='$DEPLOY_ENV'" \
+          snow git execute @COURSE_REPO.PUBLIC.advanced_data_engineering_snowflake/branches/$SNOWFLAKE_BRANCH/module-1/hamburg_weather/pipeline/data/ \
+          -D "env='$DEPLOY_ENV'"
           --database=COURSE_REPO \
           --schema=PUBLIC
