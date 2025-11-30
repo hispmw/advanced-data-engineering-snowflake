@@ -45,7 +45,7 @@ jobs:
             echo "env=staging" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy to correct Snowflake Git branch
+      - name: Deploy to Snowflake Git branch
         run: |
           snow sql -q "USE DATABASE COURSE_REPO" --connection ci
           snow git fetch course_repo.public.advanced_data_engineering_snowflake --connection ci
@@ -54,7 +54,6 @@ jobs:
             --connection ci \
             --database COURSE_REPO \
             --schema PUBLIC \
-            --process \
-            -D "env=main"
+            -D env=main
 
       - run: echo "Deployed to ${{ steps.env.outputs.env }} — LAB COMPLETE!"
