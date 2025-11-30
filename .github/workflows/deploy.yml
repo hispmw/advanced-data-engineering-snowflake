@@ -54,6 +54,6 @@ jobs:
             --connection ci \
             --database COURSE_REPO \
             --schema PUBLIC \
-            -D "env=main"
+            -D env=main
 
       - run: echo "Deployed to ${{ steps.env.outputs.env }} — LAB COMPLETE!"
