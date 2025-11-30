@@ -53,8 +53,8 @@ jobs:
             "@advanced_data_engineering_snowflake/branches/main/module-1/hamburg_weather/pipeline/data/" \
             --connection ci \
             --database COURSE_REPO \
-            --schema PUBLIC
-            --process
-            -D "env=${{ steps.env.outputs.env }}"
+            --schema PUBLIC \
+            --process \
+            -D "env=main"
 
       - run: echo "Deployed to ${{ steps.env.outputs.env }} — LAB COMPLETE!"
