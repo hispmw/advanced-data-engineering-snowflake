@@ -1,30 +1,23 @@
 USE ROLE accountadmin;
 
-
 /*--
 database, schema and warehouse creation
 --*/
 
-
 -- create tasty_bytes database
 CREATE OR ALTER DATABASE {{env}}_tasty_bytes;
-
 
 -- create raw_pos schema
 CREATE OR ALTER SCHEMA {{env}}_tasty_bytes.raw_pos;
 
-
 -- create raw_customer schema
 CREATE OR ALTER SCHEMA {{env}}_tasty_bytes.raw_customer;
-
 
 -- create harmonized schema
 CREATE OR ALTER SCHEMA {{env}}_tasty_bytes.harmonized;
 
-
 -- create analytics schema
 CREATE OR ALTER SCHEMA {{env}}_tasty_bytes.analytics;
-
 
 -- create warehouse for ingestion
 CREATE OR REPLACE WAREHOUSE demo_build_wh
@@ -34,29 +27,24 @@ CREATE OR REPLACE WAREHOUSE demo_build_wh
    AUTO_RESUME = TRUE
    INITIALLY_SUSPENDED = TRUE;
 
-
 /*--
 file format and stage creation
 --*/
 
-
 CREATE OR ALTER FILE FORMAT {{env}}_tasty_bytes.public.csv_ff
-type = 'csv';
-
+TYPE = 'CSV'
+FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+SKIP_HEADER = 1;
 
 CREATE OR REPLACE STAGE {{env}}_tasty_bytes.public.s3load
 url = 's3://sfquickstarts/tasty-bytes-builder-education/'
 file_format = {{env}}_tasty_bytes.public.csv_ff;
 
-
 /*--
 raw zone table build
 --*/
 
-
 -- country table build
-
--- todo: complete table build
 CREATE or REPLACE TABLE {{env}}_tasty_bytes.raw_pos.country
 (
    country_id NUMBER(18,0),
@@ -64,9 +52,9 @@ CREATE or REPLACE TABLE {{env}}_tasty_bytes.raw_pos.country
    iso_currency VARCHAR(3),
    iso_country VARCHAR(2),
    city VARCHAR(16777216),
+   city_id NUMBER(19,0),  -- ADDED MISSING COLUMN
    city_population VARCHAR(16777216)
 );
-
 
 -- franchise table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.franchise
@@ -80,7 +68,6 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.franchise
    phone_number VARCHAR(16777216)
 );
 
-
 -- location table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.location
 (
@@ -92,7 +79,6 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.location
    iso_country_code VARCHAR(16777216),
    country VARCHAR(16777216)
 );
-
 
 -- menu table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.menu
@@ -109,7 +95,6 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.menu
    sale_price_usd NUMBER(38,4),
    menu_item_health_metrics_obj VARIANT
 );
-
 
 -- truck table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.truck
@@ -129,7 +114,6 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.truck
    franchise_id NUMBER(38,0),
    truck_opening_date DATE
 );
-
 
 -- order_header table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.order_header
@@ -152,7 +136,6 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.order_header
    order_total NUMBER(38,4)
 );
 
-
 -- order_detail table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.order_detail
 (
@@ -166,7 +149,6 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_pos.order_detail
    price NUMBER(38,4),
    order_item_discount_amount VARCHAR(16777216)
 );
-
 
 -- customer loyalty table build
 CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_customer.customer_loyalty
@@ -188,11 +170,9 @@ CREATE OR ALTER TABLE {{env}}_tasty_bytes.raw_customer.customer_loyalty
    phone_number VARCHAR(16777216)
 );
 
-
 /*--
 harmonized view creation
 --*/
-
 
 -- orders_v view
 CREATE OR REPLACE VIEW {{env}}_tasty_bytes.harmonized.orders_v
@@ -244,7 +224,6 @@ JOIN {{env}}_tasty_bytes.raw_pos.location l
 LEFT JOIN {{env}}_tasty_bytes.raw_customer.customer_loyalty cl
    ON oh.customer_id = cl.customer_id;
 
-
 -- loyalty_metrics_v view
 CREATE OR REPLACE VIEW {{env}}_tasty_bytes.harmonized.customer_loyalty_metrics_v
    AS
@@ -264,11 +243,9 @@ ON cl.customer_id = oh.customer_id
 GROUP BY cl.customer_id, cl.city, cl.country, cl.first_name,
 cl.last_name, cl.phone_number, cl.e_mail;
 
-
 /*--
 analytics view creation
 --*/
-
 
 -- orders_v view
 CREATE OR REPLACE VIEW {{env}}_tasty_bytes.analytics.orders_v
@@ -276,65 +253,66 @@ COMMENT = 'Tasty Bytes Order Detail View'
    AS
 SELECT DATE(o.order_ts) AS date, * FROM {{env}}_tasty_bytes.harmonized.orders_v o;
 
-
 -- customer_loyalty_metrics_v view
 CREATE OR REPLACE VIEW {{env}}_tasty_bytes.analytics.customer_loyalty_metrics_v
 COMMENT = 'Tasty Bytes Customer Loyalty Member Metrics View'
    AS
 SELECT * FROM {{env}}_tasty_bytes.harmonized.customer_loyalty_metrics_v;
 
-
 /*--
 raw zone table load
 --*/
 
-
 USE WAREHOUSE demo_build_wh;
 
-
 -- country table load
--- COPY INTO {{env}}_tasty_bytes.raw_pos.country
--- (
---    country_id,
---    country,
---    iso_currency,
---    iso_country,
---    city_id,
---    city,
---    city_population
--- )
--- FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/country/;
-
+COPY INTO {{env}}_tasty_bytes.raw_pos.country
+(
+    country_id,
+    country,
+    iso_currency,
+    iso_country,
+    city,
+    city_id,
+    city_population
+)
+FROM (
+    SELECT
+        $1::NUMBER(18,0) AS country_id,
+        $2::STRING       AS country,
+        $3::STRING       AS iso_currency,
+        $4::STRING       AS iso_country,
+        $6::STRING       AS city,
+        $5::NUMBER(19,0) AS city_id,
+        $7::STRING       AS city_population
+    FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/country/
+         (FILE_FORMAT => '{{env}}_tasty_bytes.public.csv_ff')
+)
+ON_ERROR = 'ABORT_STATEMENT';
 
 -- franchise table load
 COPY INTO {{env}}_tasty_bytes.raw_pos.franchise
 FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/franchise/;
 
-
 -- location table load
 COPY INTO {{env}}_tasty_bytes.raw_pos.location
 FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/location/;
-
 
 -- menu table load
 COPY INTO {{env}}_tasty_bytes.raw_pos.menu
 FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/menu/;
 
-
 -- truck table load
 COPY INTO {{env}}_tasty_bytes.raw_pos.truck
 FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/truck/;
-
 
 -- customer_loyalty table load
 COPY INTO {{env}}_tasty_bytes.raw_customer.customer_loyalty
 FROM @{{env}}_tasty_bytes.public.s3load/raw_customer/customer_loyalty/;
 
-
 -- order_header table load
 COPY INTO {{env}}_tasty_bytes.raw_pos.order_header
 FROM @{{env}}_tasty_bytes.public.s3load/raw_pos/subset_order_header/;
-
 
 -- order_detail table load
 COPY INTO {{env}}_tasty_bytes.raw_pos.order_detail
