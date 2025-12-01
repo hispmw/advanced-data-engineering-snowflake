@@ -38,7 +38,7 @@ SKIP_HEADER = 1;
 
 CREATE OR REPLACE STAGE {{env}}_tasty_bytes.public.s3load
 url = 's3://sfquickstarts/tasty-bytes-builder-education/'
-file_format = {{env}}_tasty_bytes.public.csv_ff;
+FILE_FORMAT => '{{env}}_tasty_bytes.public.FF_RAW_POS_CSV'
 
 /*--
 raw zone table build
